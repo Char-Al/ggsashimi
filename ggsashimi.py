@@ -13,9 +13,7 @@ __version__ = "1.1.5"
 
 def get_version():
         """Return version information."""
-        prog = 'ggsashimi'
-        version = '{} v{}'.format(prog, __version__)
-        return version
+        return f'ggsashimi v{__version__}'
 
 
 def define_options():
@@ -30,10 +28,10 @@ def define_options():
                         try:
                                 get_debug_info()
                         except sp.CalledProcessError as CPE:
-                                print("ERROR: {}".format(CPE.output.strip().decode('utf-8')))
+                                print(f"ERROR: {CPE.output.strip().decode('utf-8')}")
                                 returncode = CPE.returncode
                         except Exception as e:
-                                print("ERROR: {}".format(e))
+                                print(f"ERROR: {e}")
                                 returncode = 1
                         finally:
                                 parser.exit(returncode)
@@ -122,12 +120,8 @@ def count_operator(CIGAR_op, CIGAR_len, pos, start, end, a, junctions):
                         a[ind] += 1
 
         # Insertion or Soft-clip
-        if CIGAR_op == "I" or CIGAR_op == "S":
+        if CIGAR_op in ["I", "S"]:
                 return pos
-
-        # Deletion
-        if CIGAR_op == "D":
-                pass
 
         # Junction
         if CIGAR_op == "N":
@@ -142,7 +136,7 @@ def count_operator(CIGAR_op, CIGAR_len, pos, start, end, a, junctions):
 
 
 def flip_read(s, samflag):
-        if s == "NONE" or s == "SENSE":
+        if s in ["NONE", "SENSE"]:
                 return 0
         if s == "ANTISENSE":
                 return 1
@@ -151,7 +145,7 @@ def flip_read(s, samflag):
                         return 0
                 if int(samflag) & 128:
                         return 1
-        if s == "MATE2_SENSE":
+        elif s == "MATE2_SENSE":
                 if int(samflag) & 64:
                         return 1
                 if int(samflag) & 128:
@@ -224,7 +218,7 @@ def prepare_for_R(a, junctions, c, m):
         _, start, _ = parse_coordinates(args.coordinates)
 
         # Convert the array index to genomic coordinates
-        x = list(i+start for i in range(len(a)))
+        x = [i+start for i in range(len(a))]
         y = a
 
         # Arrays for R
@@ -281,7 +275,7 @@ def shrink_density(x, y, introns):
 
 def shrink_junctions(dons, accs, introns):
         new_dons, new_accs = [0]*len(dons), [0]*len(accs)
-        real_introns = dict()
+        real_introns = {}
         shift_acc = 0
         shift_don = 0
         s = set()
@@ -295,9 +289,7 @@ def shrink_junctions(dons, accs, introns):
                         if a >= don and b <= acc:
                                 if (don,acc) not in s:
                                         new_dons[i] = don - shift_don
-                                        new_accs[i] = acc - shift_acc
-                                else:
-                                        new_accs[i] = acc - shift_acc
+                                new_accs[i] = acc - shift_acc
                                 s.add((don,acc))
                 shift_don = shift_acc
         return real_introns, new_dons, new_accs
@@ -306,7 +298,7 @@ def read_palette(f):
         palette = "#ff0000", "#00ff00", "#0000ff", "#000000"
         if f:
                 with open(f) as openf:
-                        palette = list(line.split("\t")[0].strip() for line in openf)
+                        palette = [line.split("\t")[0].strip() for line in openf]
         return palette
 
 
@@ -335,9 +327,9 @@ def read_gtf(f, c):
                                 if (el_end > start and el_start < end):
                                         transcripts[transcript_id] = max(start, el_start), min(end, el_end), strand
                                 continue
-                        if el == "exon":
-                                if (start < el_start < end or start < el_end < end):
-                                        exons.setdefault(transcript_id, []).append((max(el_start, start), min(end, el_end), strand))
+                        if el == "exon" and ((start < el_start < end
+                                              or start < el_end < end)):
+                                exons.setdefault(transcript_id, []).append((max(el_start, start), min(end, el_end), strand))
 
         return transcripts, exons
 
@@ -373,13 +365,12 @@ def make_introns(transcripts, exons, intersected_introns=None):
                 ex_end = 0
                 for ex_start, ex_end, strand in sorted(new_exons.get(tx, [])):
                         intron_end = ex_start
-                        if tx_start < ex_start:
+                        if tx_start < intron_end:
                                 introns.setdefault(tx, []).append((intron_start, intron_end, strand))
                         intron_start = ex_end
                 if tx_end > ex_end:
                         introns.setdefault(tx, []).append((intron_start, tx_end, strand))
-        d = {'transcripts': new_transcripts, 'exons': new_exons, 'introns': introns}
-        return d
+        return {'transcripts': new_transcripts, 'exons': new_exons, 'introns': introns}
 
 
 def gtf_for_ggplot(annotation, start, end, arrow_bins):
@@ -474,7 +465,8 @@ def gtf_for_ggplot(annotation, start, end, arrow_bins):
 
 
 def setup_R_script(h, w, b, label_dict):
-        s = """
+        return (
+            """
         library(ggplot2)
         library(grid)
         library(gridExtra)
@@ -505,13 +497,18 @@ def setup_R_script(h, w, b, label_dict):
         density_list = list()
         junction_list = list()
 
-        """ %({
-                'h': h,
-                'w': w,
-                'b': b,
-                'labels': ",".join(('"%s"="%s"' %(id,lab) for id,lab in label_dict.items())),
-        })
-        return s
+        """
+            % ({
+                'h':
+                h,
+                'w':
+                w,
+                'b':
+                b,
+                'labels':
+                ",".join(('"%s"="%s"' % (id, lab)
+                          for id, lab in label_dict.items())),
+            }))
 
 def median(lst):
     quotient, remainder = divmod(len(lst), 2)
@@ -529,9 +526,9 @@ def make_R_lists(id_list, d, overlay_dict, aggr, intersected_introns):
                 "mean": mean,
                 "median": median,
         }
-        id_list = id_list if not overlay_dict else overlay_dict.keys()
+        id_list = overlay_dict.keys() if overlay_dict else id_list
         # Iterate over ids to get bam signal and junctions
-        shrinked_introns = dict()
+        shrinked_introns = {}
         for k in id_list:
                 shrinked_introns_k, shrinked_intronsid = dict(), dict()
                 x, y, dons, accs, yd, ya, counts = [], [], [], [], [], [], []
@@ -600,11 +597,11 @@ def colorize(d, p, color_factor):
         n = len(levels)
         if n > len(p):
                 p = (p*n)[:n]
-        if color_factor:
-                s = "color_list = list(%s)\n" %( ",".join('"%s"="%s"' %(k, p[levels.index(v)]) for k,v in d.items()) )
-        else:
-                s = "color_list = list(%s)\n" %( ",".join('"%s"="%s"' %(k, "grey") for k,v in d.items()) )
-        return s
+        return ("color_list = list(%s)\n" % (",".join(
+            '"%s"="%s"' % (k, p[levels.index(v)])
+            for k, v in d.items())) if color_factor else
+                "color_list = list(%s)\n" % (",".join('"%s"="%s"' % (k, "grey")
+                                                      for k, v in d.items())))
 
 def get_debug_info():
         """
@@ -619,7 +616,7 @@ def get_debug_info():
         import platform
         system = platform.system()
         info = OrderedDict()
-        info["OS"] = "{}-{}".format(system, platform.machine())
+        info["OS"] = f"{system}-{platform.machine()}"
         if system == "Linux":
                 release = sp.check_output(["lsb_release", "-ds"])
                 info["Distro"] = release.strip().decode('utf-8')
@@ -642,7 +639,7 @@ def get_debug_info():
                 "sessionInfo()",
         ])
 
-        r_command = "R --vanilla --slave -e '{}'".format(r_exec)
+        r_command = f"R --vanilla --slave -e '{r_exec}'"
         r_info = sp.check_output(r_command, shell=True, stderr=sp.STDOUT)
         print(r_info.strip().decode('utf-8'))
 
